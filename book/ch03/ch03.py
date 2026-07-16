@@ -1,6 +1,8 @@
-a = 1
+# type() 不会认为子类是一种父类类型。
+# isinstance() 会认为子类是一种父类类型。
 print(type(a))
 print(a)
+pinnt(isinstance(a, int))
 
 b = 1.56e-2
 print(type(b))

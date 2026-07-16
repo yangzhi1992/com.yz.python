@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepSeek R1 RAG 知识库</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+         background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+  .app { display: flex; height: 100vh; }
+
+  /* 左侧面板 */
+  .sidebar { width: 300px; background: #1e293b; border-right: 1px solid #334155;
+             display: flex; flex-direction: column; padding: 16px; flex-shrink: 0; }
+  .sidebar h1 { font-size: 18px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+  .sidebar .sub { font-size: 12px; color: #94a3b8; margin-bottom: 16px; }
+  .upload-area { border: 2px dashed #475569; border-radius: 8px; padding: 20px;
+                 text-align: center; cursor: pointer; transition: 0.2s; margin-bottom: 12px; }
+  .upload-area:hover { border-color: #3b82f6; background: #1e3a5f30; }
+  .upload-area.dragover { border-color: #22d3ee; background: #155e7530; }
+  .upload-area svg { width: 36px; height: 36px; color: #64748b; margin-bottom: 8px; }
+  .upload-area p { font-size: 13px; color: #94a3b8; }
+  .doc-list { flex: 1; overflow-y: auto; }
+  .doc-list h3 { font-size: 13px; color: #94a3b8; margin-bottom: 8px; }
+  .doc-item { display: flex; justify-content: space-between; align-items: center;
+              padding: 8px 10px; background: #0f172a; border-radius: 6px; margin-bottom: 4px;
+              font-size: 13px; }
+  .doc-item .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .doc-item .badge { background: #3b82f6; color: #fff; border-radius: 10px;
+                     padding: 1px 8px; font-size: 11px; margin: 0 8px; }
+  .doc-item .del-btn { background: none; border: none; color: #ef4444; cursor: pointer;
+                       font-size: 16px; padding: 0 4px; opacity: 0.6; }
+  .doc-item .del-btn:hover { opacity: 1; }
+  .stats { margin-top: auto; padding-top: 12px; border-top: 1px solid #334155;
+           font-size: 12px; color: #94a3b8; }
+  .stats span { display: block; margin-bottom: 2px; }
+
+  /* 右侧聊天区 */
+  .main { flex: 1; display: flex; flex-direction: column; }
+  .messages { flex: 1; overflow-y: auto; padding: 20px; }
+  .msg { max-width: 80%; margin-bottom: 16px; animation: fadeIn 0.3s; }
+  .msg.user { margin-left: auto; }
+  .msg.ai { margin-right: auto; }
+  .msg .bubble { padding: 12px 16px; border-radius: 12px; line-height: 1.6;
+                 font-size: 14px; white-space: pre-wrap; }
+  .msg.user .bubble { background: #3b82f6; color: #fff; border-bottom-right-radius: 4px; }
+  .msg.ai .bubble { background: #1e293b; border: 1px solid #334155;
+                    border-bottom-left-radius: 4px; }
+  .msg .sources { font-size: 12px; color: #64748b; margin-top: 4px; padding: 0 4px; }
+  .msg .sources summary { cursor: pointer; }
+  .msg .sources li { margin: 2px 0; word-break: break-all; }
+  .thinking { color: #fbbf24; font-size: 13px; margin-bottom: 4px; }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  .input-bar { display: flex; gap: 8px; padding: 16px 20px; border-top: 1px solid #334155;
+               background: #1e293b; }
+  .input-bar input { flex: 1; padding: 10px 16px; border: 1px solid #475569;
+                     border-radius: 8px; background: #0f172a; color: #e2e8f0;
+                     font-size: 14px; outline: none; }
+  .input-bar input:focus { border-color: #3b82f6; }
+  .input-bar button { padding: 10px 20px; background: #3b82f6; color: #fff;
+                      border: none; border-radius: 8px; cursor: pointer; font-size: 14px; }
+  .input-bar button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .input-bar button:hover:not(:disabled) { background: #2563eb; }
+
+  .loading-dots::after { content: ''; animation: dots 1.5s steps(4, end) infinite; }
+  @keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- 左侧面板 -->
+  <div class="sidebar">
+    <h1>🧠 DeepSeek R1 RAG</h1>
+    <div class="sub">Ollama + ChromaDB</div>
+
+    <div class="upload-area" id="dropZone" onclick="document.getElementById('fileInput').click()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      <p>点击或拖拽上传文档<br><small>支持 PDF / TXT / MD</small></p>
+    </div>
+    <input type="file" id="fileInput" multiple accept=".pdf,.txt,.md" style="display:none"
+           onchange="uploadFiles(this.files)">
+
+    <div class="doc-list">
+      <h3>📚 知识库文档</h3>
+      <div id="docList"></div>
+    </div>
+
+    <div class="stats" id="stats">
+      <span>加载中...</span>
+    </div>
+  </div>
+
+  <!-- 右侧聊天区 -->
+  <div class="main">
+    <div class="messages" id="messages">
+      <div class="msg ai">
+        <div class="bubble">👋 你好！我是 DeepSeek R1 知识助手。<br>
+        上传文档后，我可以基于文档内容回答你的问题。</div>
+      </div>
+    </div>
+
+    <div class="input-bar">
+      <input type="text" id="qInput" placeholder="输入你的问题..."
+             onkeydown="if(event.key==='Enter') sendQuestion()">
+      <button id="sendBtn" onclick="sendQuestion()">发送</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============ 上传 ============
+async function uploadFiles(files) {
+  if (!files.length) return;
+  const formData = new FormData();
+  for (const f of files) formData.append('files', f);
+
+  const btn = document.querySelector('.upload-area p');
+  btn.innerHTML = '⏳ 正在处理文档...';
+
+  try {
+    const resp = await fetch('/api/upload', { method: 'POST', body: formData });
+    const data = await resp.json();
+    let msg = data.results.map(r =>
+      r.status === 'success' ? `✅ ${r.file} (${r.chunks}块)` :
+      r.status === 'skip' ? `⏭ ${r.file}: ${r.reason}` :
+      `❌ ${r.file}: ${r.reason}`
+    ).join('<br>');
+    btn.innerHTML = msg + `<br><small>已添加 ${data.total_chunks_added} 个知识块</small>`;
+  } catch (e) {
+    btn.innerHTML = '❌ 上传失败: ' + e.message;
+  }
+
+  setTimeout(() => { btn.innerHTML = '点击或拖拽上传文档<br><small>支持 PDF / TXT / MD</small>'; }, 3000);
+  refreshDocList();
+  refreshStats();
+}
+
+// 拖拽上传
+const dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('dragover', e => {
+  e.preventDefault();
+  dropZone.classList.add('dragover');
+});
+dropZone.addEventListener('dragleave', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+});
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  uploadFiles(e.dataTransfer.files);
+});
+
+// ============ 文档列表 ============
+async function refreshDocList() {
+  try {
+    const resp = await fetch('/api/list');
+    const data = await resp.json();
+    const el = document.getElementById('docList');
+    if (!data.documents || data.documents.length === 0) {
+      el.innerHTML = '<div style="color:#64748b;font-size:13px;padding:8px;">📭 暂无文档，请上传</div>';
+      return;
+    }
+    el.innerHTML = data.documents.map(d =>
+      `<div class="doc-item">
+        <span class="name">📄 ${d.name}</span>
+        <span class="badge">${d.chunks}</span>
+      </div>`
+    ).join('');
+  } catch(e) { console.error(e); }
+}
+
+async function refreshStats() {
+  try {
+    const resp = await fetch('/api/stats');
+    const data = await resp.json();
+    document.getElementById('stats').innerHTML = `
+      <span>📦 知识块: <b>${data.total_chunks}</b></span>
+      <span>🧩 Embedding: ${data.embedding_model}</span>
+      <span>🤖 LLM: ${data.llm_model}</span>
+    `;
+  } catch(e) { /* ignore */ }
+}
+
+// ============ 聊天 ============
+async function sendQuestion() {
+  const input = document.getElementById('qInput');
+  const q = input.value.trim();
+  if (!q) return;
+
+  input.value = '';
+  const btn = document.getElementById('sendBtn');
+  btn.disabled = true;
+
+  // 显示用户消息
+  appendMsg('user', q);
+
+  // 显示 AI 加载
+  const aiMsgId = appendMsg('ai', '<span class="loading-dots">🤔 思考中</span>');
+
+  try {
+    const resp = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'question=' + encodeURIComponent(q),
+    });
+    const data = await resp.json();
+
+    let answer = data.answer;
+
+    // 过滤 DeepSeek R1 的思考标签
+    answer = answer.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    // 如果开头有 "回答:" 或类似前缀
+    answer = answer.replace(/^(回答|Answer)[：:]\s*/i, '').trim();
+
+    // 构建来源
+    let sourcesHtml = '';
+    if (data.sources && data.sources.length > 0) {
+      const unique = [...new Map(data.sources.map(s => [s.source, s])).values()];
+      sourcesHtml = `
+        <details class="sources">
+          <summary>📎 引用 ${unique.length} 个文档</summary>
+          <ul>${unique.map(s => `<li>📄 ${s.source} <small>${s.content.substring(0, 80)}...</small></li>`).join('')}</ul>
+        </details>`;
+    }
+
+    // 更新时间显示
+    const bubble = document.querySelector(`#msg-${aiMsgId} .bubble`);
+    bubble.innerHTML = answer + sourcesHtml;
+
+  } catch (e) {
+    const bubble = document.querySelector(`#msg-${aiMsgId} .bubble`);
+    bubble.innerHTML = '❌ 请求失败: ' + e.message;
+  }
+
+  btn.disabled = false;
+}
+
+let msgCounter = 0;
+
+function appendMsg(role, html) {
+  msgCounter++;
+  const el = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  div.id = `msg-${msgCounter}`;
+  div.innerHTML = `<div class="bubble">${html}</div>`;
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+  return msgCounter;
+}
+
+// ============ 初始化 ============
+refreshDocList();
+refreshStats();
+</script>
+</body>
+</html>

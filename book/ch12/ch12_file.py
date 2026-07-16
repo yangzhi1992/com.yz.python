@@ -1,0 +1,44 @@
+#!/usr/bin/python
+# -*- coding: UTF-8 -*-
+
+# 打印到屏幕
+print("Python 是一个非常棒的语言，不是吗？")
+
+# 读取键盘输入
+# raw_input([prompt]) 函数从标准输入读取一个行，并返回一个字符串（去掉结尾的换行符）：
+# 请输入：Hello Python！
+# 你输入的内容是:  Hello Python！
+str = raw_input("请输入：")
+print("你输入的内容是: ", str)
+
+# input函数 input([prompt]) 函数和 raw_input([prompt]) 函数基本类似，但是 input 可以接收一个Python表达式作为输入，并将运算结果返回。
+# 请输入：[x*5 for x in range(2,10,2)]
+# 你输入的内容是:  [10, 20, 30, 40]
+str = input("请输入：")
+print("你输入的内容是: ", str)
+
+# 打开一个文件
+fo = open("foo.txt", "w")
+print("文件名: ", fo.name)
+print("是否已关闭 : ", fo.closed)
+print("访问模式 : ", fo.mode)
+print("末尾是否强制加空格 : ", fo.softspace)
+
+# 打开一个文件
+fo = open("foo.txt", "w")
+print("文件名: ", fo.name)
+# 关闭打开的文件
+fo.close()
+
+# 打开一个文件
+fo = open("foo.txt", "w")
+fo.write("www.runoob.com!\nVery good site!\n")
+# 关闭打开的文件
+fo.close()
+
+# 打开一个文件
+fo = open("foo.txt", "r+")
+str = fo.read(10)
+print("读取的字符串是 : ", str)
+# 关闭打开的文件
+fo.close()

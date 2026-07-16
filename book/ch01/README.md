@@ -1,3 +1,2 @@
-# ch01 油箱加满！准备出发！
+python -V 或 python --version
 
-从《看漫画学Python》提取的代码示例
